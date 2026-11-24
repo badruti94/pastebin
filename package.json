@@ -1,0 +1,20 @@
+{
+  "name": "pastebin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pastebin sederhana: Express + PostgreSQL (create, get by slug, get all, delete by slug)",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "init-db": "psql -U $DB_USER -h $DB_HOST -p $DB_PORT -d $DB_NAME -f schema.sql"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}

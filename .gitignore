@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+package-lock.json
+
+# secrets / environment
+.env
+.env.local
+.env.*.local
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# runtime & tmp
+pids/
+*.pid
+*.seed
+tmp/
+temp/
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# build & coverage
+dist/
+build/
+coverage/
+.nyc_output/

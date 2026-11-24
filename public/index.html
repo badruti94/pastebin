@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pastebin — Express + PostgreSQL</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel-2: #1e222d; --line: #2a2f3d;
+    --text: #e6e8ee; --muted: #8b93a7; --accent: #5aa9ff; --ok: #3ddc97;
+    --warn: #ffc857; --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  header { border-bottom: 1px solid var(--line); background: #12151d; padding: 14px 20px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .brand h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+  .brand span { color: var(--muted); font-size: 12.5px; }
+  nav { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  nav button {
+    background: var(--panel); color: var(--muted); border: 1px solid var(--line);
+    padding: 7px 14px; border-radius: 999px; cursor: pointer; font-size: 13.5px;
+  }
+  nav button.active { color: var(--text); border-color: var(--accent); background: #1b2433; }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card + .card { margin-top: 14px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 10px 0 5px; }
+  input, select, textarea {
+    width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 11px; font: inherit;
+  }
+  textarea { min-height: 230px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; resize: vertical; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 190px; }
+  .btn {
+    background: var(--accent); color: #06203d; border: 0; border-radius: 8px;
+    padding: 10px 16px; font-weight: 600; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  .btn.danger { background: transparent; color: var(--danger); border: 1px solid #4a2b2b; font-weight: 500; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  pre.content {
+    background: #0c0e14; border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; overflow: auto; max-height: 62vh; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; margin: 12px 0 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+  tr:hover td { background: #1b1f29; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { background: var(--panel-2); padding: 2px 6px; border-radius: 6px; font-size: 12.5px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .pill { display: inline-block; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--muted); }
+  .msg { border-radius: 9px; padding: 10px 12px; margin-top: 12px; font-size: 13.5px; display: none; }
+  .msg.show { display: block; }
+  .msg.ok { background: #10291f; border: 1px solid #1f5a41; color: #b9f4d8; }
+  .msg.err { background: #2b1414; border: 1px solid #6b2b2b; color: #ffd0d0; }
+  .result { margin-top: 14px; display: none; }
+  .result.show { display: block; }
+  .share { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .share input { flex: 1 1 320px; }
+  .empty { color: var(--muted); padding: 18px 0; text-align: center; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <h1>📋 Pastebin</h1>
+      <span>Express + PostgreSQL &middot; create &middot; get by slug &middot; get all &middot; delete by slug</span>
+    </div>
+    <nav>
+      <button data-tab="create" class="active">Buat Paste</button>
+      <button data-tab="browse">Jelajah</button>
+      <button data-tab="view" id="tabView">Lihat</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ================= CREATE ================= -->
+  <section id="panel-create">
+    <div class="card">
+      <label for="title">Judul (opsional)</label>
+      <input id="title" placeholder="Contoh: snippet nginx.conf" maxlength="200" />
+
+      <div class="row">
+        <div>
+          <label for="language">Bahasa / tipe</label>
+          <select id="language">
+            <option>plaintext</option><option>javascript</option><option>typescript</option>
+            <option>python</option><option>php</option><option>go</option><option>rust</option>
+            <option>sql</option><option>bash</option><option>json</option><option>yaml</option>
+            <option>html</option><option>css</option><option>markdown</option><option>dockerfile</option>
+          </select>
+        </div>
+        <div>
+          <label for="expires">Kedaluwarsa</label>
+          <select id="expires">
+            <option value="">Tidak pernah</option>
+            <option value="10m">10 menit</option>
+            <option value="1h">1 jam</option>
+            <option value="1d">1 hari</option>
+            <option value="7d">7 hari</option>
+            <option value="30d">30 hari</option>
+          </select>
+        </div>
+        <div>
+          <label for="slug">Slug sendiri (opsional)</label>
+          <input id="slug" placeholder="isi-untuk-slug tetap" pattern="[A-Za-z0-9_-]{3,16}" />
+        </div>
+      </div>
+
+      <label for="content">Isi paste *</label>
+      <textarea id="content" placeholder="Tempel teks / kode di sini..."></textarea>
+
+      <div class="actions">
+        <button class="btn" id="btnCreate">Simpan Paste</button>
+        <button class="btn ghost" id="btnClear">Bersihkan</button>
+        <span class="muted" id="counter">0 karakter</span>
+      </div>
+      <div class="msg" id="createMsg"></div>
+
+      <div class="result" id="createResult">
+        <label>Berhasil dibuat — slug: <code id="outSlug"></code></label>
+        <div class="share">
+          <input id="outUrl" readonly />
+          <button class="btn ghost" id="btnCopyUrl">Copy link</button>
+          <button class="btn ghost" id="btnOpen">Buka</button>
+        </div>
+        <div class="share">
+          <input id="outApi" readonly />
+          <button class="btn ghost" id="btnCopyApi">Copy API</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= BROWSE ================= -->
+  <section id="panel-browse" class="hidden">
+    <div class="card">
+      <div class="actions" style="margin:0 0 12px">
+        <button class="btn ghost" id="btnReload">Muat ulang</button>
+        <select id="order" style="width:auto">
+          <option value="newest">Terbaru</option>
+          <option value="oldest">Terlama</option>
+          <option value="popular">Terbanyak dilihat</option>
+          <option value="az">Judul A-Z</option>
+        </select>
+        <span class="pill" id="totalInfo">-</span>
+      </div>
+      <div id="listWrap"><div class="empty">Memuat…</div></div>
+      <p class="muted" style="margin-bottom:0">Daftar ini diambil dari <code>GET /api/pastes</code> — tanpa isi konten.</p>
+    </div>
+  </section>
+
+  <!-- ================= VIEW ================= -->
+  <section id="panel-view" class="hidden">
+    <div class="card">
+      <div class="actions" style="margin:0 0 10px">
+        <input id="lookup" placeholder="masukkan slug, lalu Enter" style="max-width:320px" />
+        <button class="btn ghost" id="btnLookup">Lihat</button>
+        <span class="muted">atau buka langsung <code>/p/&lt;slug&gt;</code></span>
+      </div>
+      <div class="msg" id="viewMsg"></div>
+      <div id="viewBody" class="hidden">
+        <h2 id="vTitle" style="margin:6px 0 4px;font-size:19px"></h2>
+        <div class="muted">
+          slug <code id="vSlug"></code> &middot;
+          <span id="vLang" class="pill"></span> &middot;
+          <span id="vSize"></span> &middot;
+          dilihat <span id="vViews"></span>x &middot;
+          dibuat <span id="vCreated"></span> &middot;
+          <span id="vExpires"></span>
+        </div>
+        <pre class="content" id="vContent"></pre>
+        <div class="actions">
+          <button class="btn ghost" id="btnCopyContent">Copy isi</button>
+          <a class="btn ghost" id="vRaw" href="#" target="_blank" rel="noopener">Buka API JSON</a>
+          <button class="btn danger" id="btnDelete">Hapus paste ini</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const api = (p) => p;                             // same-origin
+  let currentSlug = null;
+
+  /* ---------- util ---------- */
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const bytes = (n) => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB';
+  const when = (iso) => iso ? new Date(iso).toLocaleString('id-ID') : '-';
+  function showMsg(el, text, kind = 'ok') {
+    el.textContent = text;
+    el.className = 'msg show ' + kind;
+    if (kind === 'ok') setTimeout(() => el.classList.remove('show'), 4000);
+  }
+  async function call(url, opts) {
+    const res = await fetch(api(url), opts);
+    let json = null;
+    try { json = await res.json(); } catch (_) {}
+    if (!res.ok || !json || json.success === false) {
+      throw new Error((json && json.error) || ('HTTP ' + res.status));
+    }
+    return json;
+  }
+  async function copy(text, btn) {
+    try { await navigator.clipboard.writeText(text); } catch (_) { /* fallback di bawah */ }
+    const old = btn.textContent; btn.textContent = '✓ tersalin';
+    setTimeout(() => { btn.textContent = old; }, 1400);
+  }
+
+  /* ---------- tab ---------- */
+  function tab(name) {
+    ['create', 'browse', 'view'].forEach((t) => {
+      $('panel-' + t).classList.toggle('hidden', t !== name);
+      const b = document.querySelector('nav button[data-tab="' + t + '"]');
+      if (b) b.classList.toggle('active', t === name);
+    });
+    if (name === 'browse') loadList();
+  }
+  document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => tab(b.dataset.tab)));
+
+  /* ---------- CREATE ---------- */
+  $('content').addEventListener('input', (e) => {
+    $('counter').textContent = e.target.value.length.toLocaleString('id-ID') + ' karakter';
+  });
+  $('btnClear').addEventListener('click', () => {
+    ['title', 'content', 'slug'].forEach((id) => ($(id).value = ''));
+    $('counter').textContent = '0 karakter';
+    $('createResult').classList.remove('show');
+  });
+  $('btnCreate').addEventListener('click', async () => {
+    const btn = $('btnCreate');
+    const payload = {
+      content: $('content').value,
+      title: $('title').value,
+      language: $('language').value,
+      expires_in: $('expires').value,
+    };
+    if ($('slug').value.trim()) payload.slug = $('slug').value.trim();
+    if (!payload.content.trim()) return showMsg($('createMsg'), 'Isi paste masih kosong.', 'err');
+
+    btn.disabled = true; btn.textContent = 'Menyimpan…';
+    try {
+      const { data } = await call('/api/pastes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      $('outSlug').textContent = data.slug;
+      $('outUrl').value = location.origin + data.url;
+      $('outApi').value = location.origin + data.api_url;
+      $('createResult').classList.add('show');
+      showMsg($('createMsg'), 'Paste tersimpan (slug ' + data.slug + ').', 'ok');
+    } catch (err) {
+      showMsg($('createMsg'), 'Gagal: ' + err.message, 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Simpan Paste';
+    }
+  });
+  $('btnCopyUrl').addEventListener('click', (e) => copy($('outUrl').value, e.target));
+  $('btnCopyApi').addEventListener('click', (e) => copy($('outApi').value, e.target));
+  $('btnOpen').addEventListener('click', () => { location.href = $('outUrl').value; });
+
+  /* ---------- BROWSE ---------- */
+  $('btnReload').addEventListener('click', loadList);
+  $('order').addEventListener('change', loadList);
+
+  async function loadList() {
+    const wrap = $('listWrap');
+    wrap.innerHTML = '<div class="empty">Memuat…</div>';
+    try {
+      const json = await call('/api/pastes?limit=100&order=' + encodeURIComponent($('order').value));
+      const rows = json.data || [];
+      $('totalInfo').textContent = (json.meta ? json.meta.total : rows.length) + ' paste';
+      if (!rows.length) { wrap.innerHTML = '<div class="empty">Belum ada paste.</div>'; return; }
+      wrap.innerHTML =
+        '<table><thead><tr><th>Slug</th><th>Judul</th><th>Bahasa</th><th>Ukuran</th><th>Dilihat</th><th>Dibuat</th><th></th></tr></thead><tbody>' +
+        rows.map((r) => (
+          '<tr>' +
+            '<td><a href="/p/' + encodeURIComponent(r.slug) + '"><code>' + esc(r.slug) + '</code></a></td>' +
+            '<td>' + esc(r.title) + '</td>' +
+            '<td>' + esc(r.language) + '</td>' +
+            '<td>' + bytes(r.size_bytes) + '</td>' +
+            '<td>' + r.views + '</td>' +
+            '<td>' + when(r.created_at) + '</td>' +
+            '<td style="white-space:nowrap">' +
+              '<button class="btn ghost" data-open="' + esc(r.slug) + '">Lihat</button> ' +
+              '<button class="btn danger" data-del="' + esc(r.slug) + '">Hapus</button>' +
+            '</td>' +
+          '</tr>'
+        )).join('') + '</tbody></table>';
+
+      wrap.querySelectorAll('[data-open]').forEach((b) =>
+        b.addEventListener('click', () => openPaste(b.dataset.open)));
+      wrap.querySelectorAll('[data-del]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          if (!confirm('Hapus paste ' + b.dataset.del + '?')) return;
+          try { await call('/api/pastes/' + encodeURIComponent(b.dataset.del), { method: 'DELETE' }); loadList(); }
+          catch (err) { alert('Gagal hapus: ' + err.message); }
+        }));
+    } catch (err) {
+      wrap.innerHTML = '<div class="empty">Gagal memuat: ' + esc(err.message) + '</div>';
+    }
+  }
+
+  /* ---------- VIEW (get by slug) ---------- */
+  $('btnLookup').addEventListener('click', () => openPaste($('lookup').value.trim()));
+  $('lookup').addEventListener('keydown', (e) => { if (e.key === 'Enter') openPaste($('lookup').value.trim()); });
+
+  async function openPaste(slug) {
+    tab('view');
+    if (!slug) return;
+    currentSlug = slug;
+    $('lookup').value = slug;
+    $('viewBody').classList.add('hidden');
+    $('viewMsg').className = 'msg';
+    try {
+      const { data } = await call('/api/pastes/' + encodeURIComponent(slug));
+      $('vTitle').textContent = data.title;
+      $('vSlug').textContent = data.slug;
+      $('vLang').textContent = data.language;
+      $('vSize').textContent = bytes(data.size_bytes);
+      $('vViews').textContent = data.views;
+      $('vCreated').textContent = when(data.created_at);
+      $('vExpires').textContent = data.expires_at ? 'kedaluwarsa ' + when(data.expires_at) : 'tanpa kedaluwarsa';
+      $('vContent').textContent = data.content;
+      $('vRaw').href = data.api_url;
+      $('viewBody').classList.remove('hidden');
+      history.replaceState(null, '', '/p/' + data.slug);
+    } catch (err) {
+      history.replaceState(null, '', '/p/' + slug);
+      showMsg($('viewMsg'), 'Gagal: ' + err.message, 'err');
+    }
+  }
+  $('btnCopyContent').addEventListener('click', (e) => copy($('vContent').textContent, e.target));
+  $('btnDelete').addEventListener('click', async (e) => {
+    if (!currentSlug || !confirm('Hapus paste ' + currentSlug + '? Tindakan ini permanen.')) return;
+    const btn = e.target; btn.disabled = true;
+    try {
+      await call('/api/pastes/' + encodeURIComponent(currentSlug), { method: 'DELETE' });
+      $('viewBody').classList.add('hidden');
+      showMsg($('viewMsg'), 'Paste ' + currentSlug + ' sudah dihapus.', 'ok');
+      history.replaceState(null, '', '/');
+    } catch (err) {
+      showMsg($('viewMsg'), 'Gagal hapus: ' + err.message, 'err');
+    } finally { btn.disabled = false; }
+  });
+
+  /* ---------- routing: /p/<slug> langsung buka viewer ---------- */
+  const m = /^\/p\/([A-Za-z0-9_-]{3,16})\/?$/.exec(location.pathname);
+  if (m) openPaste(m[1]);
+  else {
+    const q = new URLSearchParams(location.search).get('slug');
+    if (q) openPaste(q);
+  }
+})();
+</script>
+</body>
+</html>
